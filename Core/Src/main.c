@@ -23,6 +23,9 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include <string.h>
+#include "Bsp_Gimbal.h"
+#include "usbd_cdc_if.h"
 
 /* USER CODE END Includes */
 
@@ -56,6 +59,11 @@ void SystemClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+gimbal_driver_t*    gimbalL;
+gimbal_driver_t*    gimbalR;
+uint8_t             printBuf[64];
+uint32_t            leftLED_DebugTick = 0;
+uint32_t            rightLED_DebugTick = 0;
 /* USER CODE END 0 */
 
 /**
@@ -88,6 +96,12 @@ int main(void)
   MX_GPIO_Init();
   MX_USB_DEVICE_Init();
   /* USER CODE BEGIN 2 */
+  uint16_t leftX;
+  uint16_t leftY;
+  uint16_t rightX;
+  uint16_t rightY;
+  gimbalL = bspGimbalRegister_L();
+  gimbalR = bspGimbalRegister_R();
   
   /* USER CODE END 2 */
 
@@ -95,6 +109,35 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+    /* Print data to USB */
+    sprintf((char*)printBuf, "%5d,%5d,%5d,%5d\n", leftX, leftY, rightX, rightY);
+    CDC_Transmit_FS(printBuf, 25);
+    
+    /* Update the channel data of the two joysticks */
+    leftX  = gimbalL->_getX();
+    leftY  = gimbalL->_getY();
+    rightX = gimbalR->_getX();
+    rightY = gimbalR->_getY();
+    
+    /* Every time an error data is received, the LED will light up for at least 100ms */
+    if(leftX>=8192 || leftY>=8192){
+        leftLED_DebugTick = HAL_GetTick();
+        HAL_GPIO_WritePin(LED_LEFT_OPEN_GPIO_Port,  LED_LEFT_OPEN_Pin,  GPIO_PIN_SET);
+    }
+    if(rightX>=8192 || rightY>=8192){
+        rightLED_DebugTick = HAL_GetTick();
+        HAL_GPIO_WritePin(LED_RIGHT_OPEN_GPIO_Port, LED_RIGHT_OPEN_Pin, GPIO_PIN_SET);
+    }
+    
+    /* If no error occurs within 100 milliseconds, the LED will be turned off */
+    if(HAL_GetTick()-leftLED_DebugTick > 100){
+        HAL_GPIO_WritePin(LED_LEFT_OPEN_GPIO_Port,  LED_LEFT_OPEN_Pin,  GPIO_PIN_RESET);
+    }
+    if(HAL_GetTick()-rightLED_DebugTick > 100){
+        HAL_GPIO_WritePin(LED_RIGHT_OPEN_GPIO_Port, LED_RIGHT_OPEN_Pin, GPIO_PIN_RESET);
+    }
+    
+    HAL_Delay(1);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
